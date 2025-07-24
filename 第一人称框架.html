@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>第一人称框架</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+  <style>
+    * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    .forward,
+    .left,
+    .right,
+    .retreat {
+      width: 40px;
+      height: 40px;
+      border: 1px solid black;
+      border-radius: 3px;
+      margin: 1px;
+      text-align: center;
+      line-height: 40px;
+    }
+
+    .forward,
+    .retreat,
+    .right {
+      margin-left: 43px;
+    }
+
+    .lf {
+      display: flex;
+    }
+    .buttom{
+      display: flex;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="screen">
+
+  </div>
+  <div class="buttom">
+    <div>
+      <div>
+        <div class="forward">
+          ↑
+        </div>
+      </div>
+      <div class="lf">
+        <div class="left">
+          ←
+        </div>
+        <div class="right">
+          →
+        </div>
+      </div>
+      <div>
+        <div class="retreat">
+          ↓
+        </div>
+      </div>
+    </div>
+    <div class="control">鼠标控制</div>
+  </div>
+
+
+
+</body>
+<script>
+  //Lingqing数学库(没封装)
+  //角度转弧度
+  function toHu(du) {
+    return Math.PI * (du / 180);
+  };
+  //返回相机视线上离相机1个单位的坐标(其实是一个向量)
+  function sightAddOne() {
+    const sightVector = new THREE.Vector3();
+    camera.getWorldDirection(sightVector);
+    let coordinate = new THREE.Vector3();
+    coordinate.x = camera.position.x + sightVector.x;
+    coordinate.y = camera.position.y + sightVector.y;
+    coordinate.z = camera.position.z + sightVector.z;
+
+    return coordinate;
+  };
+  //获取摄像机的本地x轴
+  //先获取相机的视线向量，把分量x和-z交换获得相机本地x轴(虽然方法有点野，但我是天才)
+  function getRightVector() {
+    const cameraAxis = new THREE.Vector3();
+    camera.getWorldDirection(cameraAxis);
+    cameraAxis.y = 0;
+    cameraAxis.normalize();
+    const x = -cameraAxis.x;
+    cameraAxis.x = cameraAxis.z;
+    cameraAxis.z = x;
+    cameraAxis.normalize();
+    return cameraAxis;
+  };
+
+
+
+
+
+</script>
+<script>
+
+  //各种参数
+  //窗口大小
+  const screenWisth = window.innerWidth - 20;
+  const screenHeight = window.innerHeight - 150;
+
+  //相机视场角
+  const cameraPOV = 70;
+
+  //太阳光强度
+  const lightIntensity = 1;
+  //照射距离
+  const lightdIstance = 600;
+
+  //走路速度
+  const walkSpeed = 0.1;
+
+  //灵敏度
+  const moveSpeed = 0.3;
+
+  //元素数组(地图)
+  let itemList = [{
+    type: "block",
+    coordinate: {
+      x: 1,
+      y: 1,
+      z: 1
+    },
+    size: {
+      x: 2,
+      y: 2,
+      z: 2
+    }
+  },
+  {
+    type: "block",
+    coordinate: {
+      x: 3,
+      y: 1,
+      z: 3
+    },
+    size: {
+      x: 2,
+      y: 2,
+      z: 2
+    }
+  }];
+
+  //元素贴图
+  const blockMaterial = [
+    new THREE.MeshBasicMaterial({
+      color: 0xff0000
+    }),
+    // 右 (红)
+    new THREE.MeshBasicMaterial({
+      color: 0x00ff00
+    }),
+    // 左 (绿)
+    new THREE.MeshBasicMaterial({
+      color: 0x0000ff
+    }),
+    // 上 (蓝)
+    new THREE.MeshBasicMaterial({
+      color: 0xffff00
+    }),
+    // 下 (黄)
+    new THREE.MeshBasicMaterial({
+      color: 0xff00ff
+    }),
+    // 前 (品红)
+    new THREE.MeshBasicMaterial({
+      color: 0x00ffff
+    }) // 后 (青)
+  ];
+
+  //初始化虚拟场景
+  const scene = new THREE.Scene();
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({
+    color: 0xcccccc,
+  })); //地板
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+  })); //太阳
+  const sunLight = new THREE.PointLight(0xffffff, lightIntensity, lightdIstance); //阳光
+
+  const camera = new THREE.PerspectiveCamera(cameraPOV, screenWisth / screenHeight, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer();
+
+  //添加
+  scene.add(sun);
+  scene.add(floor);
+  scene.add(sunLight);
+
+  floor.rotation.x = toHu(-90);
+
+  //位置
+  floor.position.set(0, 0, 0);
+  sun.position.set(20, 50, 10);
+  sunLight.position.copy(sun.position);
+  camera.position.set(1, 1, 10);
+  camera.lookAt(1, 1, 1);
+  renderer.setSize(screenWisth, screenHeight);
+
+  //设置
+  renderer.shadowMap.enabled = false;
+  sunLight.castShadow = false;
+  sunLight.shadow.mapSize.width = 1024;
+  sunLight.shadow.mapSize.height = 1024;
+
+  //把元素数组里的元素添加到场景里
+  function addItem() {
+    for (let i = 0; i < itemList.length; i++) {
+      const item = itemList[i];
+      const itemOBJ = new THREE.Mesh(new THREE.BoxGeometry(item.size.x, item.size.y, item.size.z), blockMaterial);
+      scene.add(itemOBJ);
+      itemOBJ.position.set(item.coordinate.x, item.coordinate.y, item.coordinate.z);
+    };
+  };
+  addItem();
+
+  renderer.render(scene, camera);
+  const screen = document.querySelector(".screen");
+  screen.appendChild(renderer.domElement);
+</script>
+<script>
+  //获取摄像机视线上离摄像机距离为1的点坐标
+  // 获取摄像机视线方向（单位向量）
+  //const direction = new THREE.Vector3();
+  //camera.getWorldDirection(direction);
+
+
+  //lingqing解法
+  //let mbzb = new THREE.Vector3();
+  //mbzb.x = camera.position.x+direction.x;
+  //mbzb.y = camera.position.y+direction.y;
+  //mbzb.z = camera.position.z+direction.z;
+
+  //console.log(mbzb);
+
+  //ai解法
+  // 计算离摄像机 1 个单位远的点
+  //const distance = 1;
+  //const targetPoint = new THREE.Vector3();
+  //targetPoint.copy(camera.position).add(direction.multiplyScalar(distance));
+
+  //console.log("摄像机前方 1 个单位远的坐标:", targetPoint);
+</script>
+<script>
+  //相机控件
+
+  //移动
+  //前进
+  let k;
+  const forward = document.querySelector(".forward");
+  forward.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      let cameraPosition = camera.position;
+      let cameraFace = new THREE.Vector3();
+      camera.getWorldDirection(cameraFace);
+      cameraFace.y = 0;
+      cameraFace.normalize();
+      camera.position.set(
+        cameraPosition.x + (cameraFace.x * walkSpeed),
+        cameraPosition.y + (cameraFace.y * walkSpeed),
+        cameraPosition.z + (cameraFace.z * walkSpeed)
+      );
+      renderer.render(scene, camera);
+      //console.log(camera.position);
+    }, 16);
+    //console.log("bbb");
+  });
+  forward.addEventListener("touchend", () => {
+    clearInterval(k);
+    //console.log("aaa");
+  });
+  //左
+  const left = document.querySelector(".left");
+  left.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      const vector = getRightVector();
+      let cameraPosition = camera.position;
+      cameraPosition.x += vector.x * walkSpeed;
+      cameraPosition.z += vector.z * walkSpeed;
+      camera.position.set(
+        cameraPosition.x,
+        camera.position.y,
+        cameraPosition.z
+      );
+      renderer.render(scene, camera);
+    }, 16);
+  });
+  left.addEventListener("touchend", () => {
+    clearInterval(k);
+  });
+  //右
+  const right = document.querySelector(".right");
+  right.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      const vector = getRightVector();
+      let cameraPosition = camera.position;
+      cameraPosition.x -= vector.x * walkSpeed;
+      cameraPosition.z -= vector.z * walkSpeed;
+      camera.position.set(
+        cameraPosition.x,
+        camera.position.y,
+        cameraPosition.z
+      );
+      renderer.render(scene, camera);
+    }, 16);
+  });
+  right.addEventListener("touchend", () => {
+    clearInterval(k);
+  });
+  //后退
+  const retreat = document.querySelector(".retreat");
+  retreat.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      let cameraPosition = camera.position;
+      let cameraFace = new THREE.Vector3();
+      camera.getWorldDirection(cameraFace);
+      cameraFace.y = 0;
+      cameraFace.normalize();
+      camera.position.set(
+        cameraPosition.x - (cameraFace.x * walkSpeed),
+        cameraPosition.y - (cameraFace.y * walkSpeed),
+        cameraPosition.z - (cameraFace.z * walkSpeed)
+      );
+      renderer.render(scene, camera);
+      //console.log(camera.position);
+    }, 16);
+    //console.log("bbb");
+  });
+  retreat.addEventListener("touchend", () => {
+    clearInterval(k);
+    //console.log("aaa");
+  });
+
+
+  //触屏
+  let startX, startY;
+  let isDragging = false;
+
+  screen.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startX = e.touches[0].pageX;
+    startY = e.touches[0].pageY;
+    isDragging = true;
+  });
+
+
+  let rotationAngleX = 0;
+  let rotationAngleY = 0;
+  screen.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+
+    const moveX = e.touches[0].pageX - startX;
+    const moveY = e.touches[0].pageY - startY;
+
+    if (rotationAngleX <= toHu(60) && rotationAngleX >= -toHu(60)) {
+      rotationAngleX += toHu(moveY * moveSpeed);
+      console.log(rotationAngleX);
+    } else {
+      if (rotationAngleX < 0) {
+        rotationAngleX = toHu(-60);
+        //renderer.render(scene, camera);
+      } else {
+        rotationAngleX = toHu(60);
+      }
+      //console.log('a');
+    };
+    //rotationAngleX += toHu(moveY*moveSpeed);
+    rotationAngleY -= toHu(moveX * moveSpeed);
+    const quaternionX = new THREE.Quaternion();
+    const quaternionY = new THREE.Quaternion();
+
+
+    quaternionX.setFromAxisAngle(getRightVector(), rotationAngleX);
+    quaternionY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationAngleY);
+
+    camera.quaternion.multiplyQuaternions(quaternionX, quaternionY);
+
+
+
+    startX = e.touches[0].pageX;
+    startY = e.touches[0].pageY;
+    renderer.render(scene, camera);
+  });
+
+  screen.addEventListener('touchend', () => {
+    isDragging = false;
+  });
+
+  //pc端
+  let qj, ht, z, y;
+  document.addEventListener("keydown", (e) => {
+
+    if (e.code === 'KeyW') {
+      clearInterval(qj);
+      qj = null;
+      qj = setInterval(() => {
+        let cameraPosition = camera.position;
+        let cameraFace = new THREE.Vector3();
+        camera.getWorldDirection(cameraFace);
+        cameraFace.y = 0;
+        cameraFace.normalize();
+        camera.position.set(
+          cameraPosition.x + (cameraFace.x * walkSpeed),
+          cameraPosition.y + (cameraFace.y * walkSpeed),
+          cameraPosition.z + (cameraFace.z * walkSpeed)
+        );
+        renderer.render(scene, camera);
+        //console.log('aaa');
+      }, 16);
+      //console.log("bbb");
+    };
+    if (e.code === 'KeyS') {
+      clearInterval(ht);
+      ht = null;
+      ht = setInterval(() => {
+        let cameraPosition = camera.position;
+        let cameraFace = new THREE.Vector3();
+        camera.getWorldDirection(cameraFace);
+        cameraFace.y = 0;
+        cameraFace.normalize();
+        camera.position.set(
+          cameraPosition.x - (cameraFace.x * walkSpeed),
+          cameraPosition.y - (cameraFace.y * walkSpeed),
+          cameraPosition.z - (cameraFace.z * walkSpeed)
+        );
+        renderer.render(scene, camera);
+      }, 16);
+    };
+    if (e.code === 'KeyA') {
+      clearInterval(z);
+      z = null;
+      z = setInterval(() => {
+        const vector = getRightVector();
+        let cameraPosition = camera.position;
+        cameraPosition.x += vector.x * walkSpeed;
+        cameraPosition.z += vector.z * walkSpeed;
+        camera.position.set(
+          cameraPosition.x,
+          camera.position.y,
+          cameraPosition.z
+        );
+        renderer.render(scene, camera);
+      }, 16);
+    };
+    if (e.code === 'KeyD') {
+      clearInterval(y);
+      y = null;
+      y = setInterval(() => {
+        const vector = getRightVector();
+        let cameraPosition = camera.position;
+        cameraPosition.x -= vector.x * walkSpeed;
+        cameraPosition.z -= vector.z * walkSpeed;
+        camera.position.set(
+          cameraPosition.x,
+          camera.position.y,
+          cameraPosition.z
+        );
+        renderer.render(scene, camera);
+      }, 16);
+    };
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.code === 'KeyW') {
+      clearInterval(qj);
+      qj = null;
+    };
+    if (e.code === 'KeyS') {
+      clearInterval(ht);
+      ht = null;
+    };
+    if (e.code === 'KeyA') {
+      clearInterval(z);
+      z = null;
+    };
+    if (e.code === 'KeyD') {
+      clearInterval(y);
+      y = null;
+    };
+  });
+
+  //鼠标控制
+  let pcRotationAngleX = 0;
+  let pcRotationAngleY = 0;
+
+  const control = document.querySelector('.control');
+  control.addEventListener("click", () => {
+    control.requestPointerLock();//锁定鼠标
+    document.addEventListener('mousemove', (e) => {
+      e.stopPropagation();
+      if (pcRotationAngleX <= toHu(60) && pcRotationAngleX >= -toHu(60)) {
+        pcRotationAngleX += toHu(e.movementY * moveSpeed);
+        renderer.render(scene, camera);
+      } else {
+        if (pcRotationAngleX < 0) {
+          pcRotationAngleX = toHu(-60);
+          renderer.render(scene, camera);
+        } else {
+          pcRotationAngleX = toHu(60);
+          renderer.render(scene, camera);
+        }
+        //console.log('a');
+      };
+      //rotationAngleX += toHu(moveY*moveSpeed);
+      pcRotationAngleY -= toHu(e.movementX * moveSpeed);
+      const quaternionX = new THREE.Quaternion();
+      const quaternionY = new THREE.Quaternion();
+
+
+      quaternionX.setFromAxisAngle(getRightVector(), pcRotationAngleX);
+      quaternionY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), pcRotationAngleY);
+
+      camera.quaternion.multiplyQuaternions(quaternionX, quaternionY);
+      //console.log(e.movementX);
+    });
+
+
+
+  });
+
+
+
+
+
+
+
+</script>
+
+</html>
