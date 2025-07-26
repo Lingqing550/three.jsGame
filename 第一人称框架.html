@@ -34,6 +34,7 @@
     .lf {
       display: flex;
     }
+
     .buttom {
       display: flex;
     }
@@ -106,23 +107,23 @@
   //把现实世界的时间转换成太阳公转角返回
   function timeToAngle() {
     const dat = new Date();
-    const time = (dat.getHours()*60)+dat.getMinutes();
-    const angle = (time - 720)*0.25;
+    const time = (dat.getHours() * 60) + dat.getMinutes();
+    const angle = (time - 720) * 0.25;
     //console.log(time);
     return angle;
   };
   //天空变色
   function skyColorToBlack(s) {
     if (s == true) {
-      skyColorR = 135-Math.floor(sunRevolutionAngle%360);
-      skyColorG = 206-Math.floor(sunRevolutionAngle%360);
-      skyColorB = 235-Math.floor(sunRevolutionAngle%360);
+      skyColorR = 135 - Math.floor(sunRevolutionAngle % 360);
+      skyColorG = 206 - Math.floor(sunRevolutionAngle % 360);
+      skyColorB = 235 - Math.floor(sunRevolutionAngle % 360);
     } else {
-      skyColorR = 5+Math.floor(sunRevolutionAngle%360)-229;
-      skyColorG = 76+Math.floor(sunRevolutionAngle%360)-229;
-      skyColorB = 105+Math.floor(sunRevolutionAngle%360)-229;
+      skyColorR = 5 + Math.floor(sunRevolutionAngle % 360) - 229;
+      skyColorG = 76 + Math.floor(sunRevolutionAngle % 360) - 229;
+      skyColorB = 105 + Math.floor(sunRevolutionAngle % 360) - 229;
     };
-    let skyColor = "rgb("+skyColorR+","+skyColorG+","+skyColorB+")";
+    let skyColor = "rgb(" + skyColorR + "," + skyColorG + "," + skyColorB + ")";
     //console.log(skyColor);
     skyBox.material.color = new THREE.Color(skyColor);
 
@@ -149,7 +150,7 @@
   let skyColorR = 135;
   let skyColorG = 206;
   let skyColorB = 235;
-  let skyColor = "rgb("+skyColorR+","+skyColorG+","+skyColorB+")";
+  let skyColor = "rgb(" + skyColorR + "," + skyColorG + "," + skyColorB + ")";
 
   //走路速度
   const walkSpeed = 0.1;
@@ -171,19 +172,19 @@
       z: 2
     }
   },
-    {
-      type: "block",
-      coordinate: {
-        x: 3,
-        y: 1,
-        z: 3
-      },
-      size: {
-        x: 2,
-        y: 2,
-        z: 2
-      }
-    }];
+  {
+    type: "block",
+    coordinate: {
+      x: 3,
+      y: 1,
+      z: 3
+    },
+    size: {
+      x: 2,
+      y: 2,
+      z: 2
+    }
+  }];
 
   //元素贴图
   const blockMaterial = [
@@ -219,8 +220,8 @@
     const textuer = canvas.getContext('2d');
     for (let i = 0; i < 10; i++) {
       for (let l = 0; l < 10; l++) {
-        textuer.fillStyle = (i+l)%2 == 0 ? "#4a4a4a": "#2a2a2a";
-        textuer.fillRect(l*20, i*20, 20, 20);
+        textuer.fillStyle = (i + l) % 2 == 0 ? "#4a4a4a" : "#2a2a2a";
+        textuer.fillRect(l * 20, i * 20, 20, 20);
       };
     };
     const canvasTexture = new THREE.CanvasTexture(canvas);
@@ -255,8 +256,11 @@
     side: THREE.BackSide
   })); //天空盒
   const sun = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshBasicMaterial({
-    color: 0xffffff,
+    color: 0xfff9b6,
   })); //太阳
+  const moon = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+  })); //月亮
   const sunLight = new THREE.PointLight(0xffffff, lightIntensity, lightdIstance); //阳光
   const ambientLight = new THREE.AmbientLight(0x404040); //环境光
 
@@ -265,6 +269,7 @@
 
   //添加
   scene.add(sun);
+  scene.add(moon);
   scene.add(floor);
   scene.add(skyBox);
   scene.add(sunLight);
@@ -331,35 +336,39 @@
   //世界法则
   //太阳公转(地心说的一集)
   let sunRevolutionAngle = timeToAngle(); //公转角度(相对于y轴)
-  sun.position.y = Math.cos(toHu(sunRevolutionAngle))*50;
-  sun.position.x = Math.sin(toHu(sunRevolutionAngle))*50;
+  sun.position.y = Math.cos(toHu(sunRevolutionAngle)) * 50;
+  sun.position.x = Math.sin(toHu(sunRevolutionAngle)) * 50;
+  moon.position.y = -(Math.cos(toHu(sunRevolutionAngle)) * 50);
+  moon.position.x = -(Math.sin(toHu(sunRevolutionAngle)) * 50);
   sunLight.position.copy(sun.position);
-  skyBox.rotation.z =-sunRevolutionAngle;
+  skyBox.rotation.z = -sunRevolutionAngle;
 
-skyBox.material.color = new THREE.Color("rgb(5,76,105)");
-  if ((sunRevolutionAngle%360) >= 0 && (sunRevolutionAngle%360) <= 130) {
+  skyBox.material.color = new THREE.Color("rgb(5,76,105)");
+  if ((sunRevolutionAngle % 360) >= 0 && (sunRevolutionAngle % 360) <= 130) {
     skyColorToBlack(true);
     //console.log("aaa");
   };
-  if ((sunRevolutionAngle%360) >= 229 && (sunRevolutionAngle%360) <= 359) {
+  if ((sunRevolutionAngle % 360) >= 229 && (sunRevolutionAngle % 360) <= 359) {
     skyColorToBlack(false);
     //console.log("bbb");
   };
 
   renderer.render(scene, camera);
-  setInterval(()=> {
+  setInterval(() => {
     sunRevolutionAngle += 0.25;
-    sun.position.y = Math.cos(toHu(sunRevolutionAngle))*50;
-    sun.position.x = Math.sin(toHu(sunRevolutionAngle))*50;
+    sun.position.y = Math.cos(toHu(sunRevolutionAngle)) * 50;
+    sun.position.x = Math.sin(toHu(sunRevolutionAngle)) * 50;
+    moon.position.y = -(Math.cos(toHu(sunRevolutionAngle)) * 50);
+    moon.position.x = -(Math.sin(toHu(sunRevolutionAngle)) * 50);
 
     sunLight.position.copy(sun.position);
-    skyBox.rotation.z =-toHu(sunRevolutionAngle);
+    skyBox.rotation.z = -toHu(sunRevolutionAngle);
 
-    if ((sunRevolutionAngle%360) >= 0 && (sunRevolutionAngle%360) <= 130) {
+    if ((sunRevolutionAngle % 360) >= 0 && (sunRevolutionAngle % 360) <= 130) {
       skyColorToBlack(true);
       //console.log("aaa");
     };
-    if ((sunRevolutionAngle%360) >= 229 && (sunRevolutionAngle%360) <= 359) {
+    if ((sunRevolutionAngle % 360) >= 229 && (sunRevolutionAngle % 360) <= 359) {
       skyColorToBlack(false);
       //console.log("bbb");
     };
