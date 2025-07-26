@@ -34,7 +34,7 @@
     .lf {
       display: flex;
     }
-    .buttom{
+    .buttom {
       display: flex;
     }
   </style>
@@ -65,7 +65,9 @@
         </div>
       </div>
     </div>
-    <div class="control">鼠标控制</div>
+    <div class="control" style="margin-left:50px">
+      鼠标控制
+    </div>
   </div>
 
 
@@ -101,9 +103,30 @@
     cameraAxis.normalize();
     return cameraAxis;
   };
+  //把现实世界的时间转换成太阳公转角返回
+  function timeToAngle() {
+    const dat = new Date();
+    const time = (dat.getHours()*60)+dat.getMinutes();
+    const angle = (time - 720)*0.25;
+    //console.log(time);
+    return angle;
+  };
+  //天空变色
+  function skyColorToBlack(s) {
+    if (s == true) {
+      skyColorR = 135-Math.floor(sunRevolutionAngle%360);
+      skyColorG = 206-Math.floor(sunRevolutionAngle%360);
+      skyColorB = 235-Math.floor(sunRevolutionAngle%360);
+    } else {
+      skyColorR = 5+Math.floor(sunRevolutionAngle%360)-229;
+      skyColorG = 76+Math.floor(sunRevolutionAngle%360)-229;
+      skyColorB = 105+Math.floor(sunRevolutionAngle%360)-229;
+    };
+    let skyColor = "rgb("+skyColorR+","+skyColorG+","+skyColorB+")";
+    //console.log(skyColor);
+    skyBox.material.color = new THREE.Color(skyColor);
 
-
-
+  };
 
 
 </script>
@@ -118,9 +141,15 @@
   const cameraPOV = 70;
 
   //太阳光强度
-  const lightIntensity = 1;
+  const lightIntensity = 2;
   //照射距离
   const lightdIstance = 600;
+
+  //天空初始颜色
+  let skyColorR = 135;
+  let skyColorG = 206;
+  let skyColorB = 235;
+  let skyColor = "rgb("+skyColorR+","+skyColorG+","+skyColorB+")";
 
   //走路速度
   const walkSpeed = 0.1;
@@ -142,56 +171,94 @@
       z: 2
     }
   },
-  {
-    type: "block",
-    coordinate: {
-      x: 3,
-      y: 1,
-      z: 3
-    },
-    size: {
-      x: 2,
-      y: 2,
-      z: 2
-    }
-  }];
+    {
+      type: "block",
+      coordinate: {
+        x: 3,
+        y: 1,
+        z: 3
+      },
+      size: {
+        x: 2,
+        y: 2,
+        z: 2
+      }
+    }];
 
   //元素贴图
   const blockMaterial = [
-    new THREE.MeshBasicMaterial({
+    //new THREE.MeshBasicMaterial({//没阴影
+    new THREE.MeshStandardMaterial({
       color: 0xff0000
     }),
     // 右 (红)
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color: 0x00ff00
     }),
     // 左 (绿)
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color: 0x0000ff
     }),
     // 上 (蓝)
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color: 0xffff00
     }),
     // 下 (黄)
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color: 0xff00ff
     }),
     // 前 (品红)
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color: 0x00ffff
     }) // 后 (青)
   ];
+  //地板贴图(棋盘格)
+  function floorTextuer() {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 200;
+    const textuer = canvas.getContext('2d');
+    for (let i = 0; i < 10; i++) {
+      for (let l = 0; l < 10; l++) {
+        textuer.fillStyle = (i+l)%2 == 0 ? "#4a4a4a": "#2a2a2a";
+        textuer.fillRect(l*20, i*20, 20, 20);
+      };
+    };
+    const canvasTexture = new THREE.CanvasTexture(canvas);
+    canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
+    canvasTexture.repeat.set(40, 40);
+    return canvasTexture;
+  };
+  //天空盒渐变材质
+  function skyBoxTextuer() {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 200;
+    const textuer = canvas.getContext('2d');
+    const colors = textuer.createLinearGradient(0, 30, 0, 180);
+    colors.addColorStop(0, "#87ceeb");
+    colors.addColorStop(1, "#384c54");
+    textuer.fillStyle = colors;
+    textuer.fillRect(0, 0, 200, 200);
+
+    const canvasTexture = new THREE.CanvasTexture(canvas);
+    return canvasTexture;
+  };
+
 
   //初始化虚拟场景
   const scene = new THREE.Scene();
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({
-    color: 0xcccccc,
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({
+    map: floorTextuer(),
+    roughness: 0.8
   })); //地板
-  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshBasicMaterial({
+  const skyBox = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000), new THREE.MeshBasicMaterial({
+    color: new THREE.Color(skyColor),
+    side: THREE.BackSide
+  })); //天空盒
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshBasicMaterial({
     color: 0xffffff,
   })); //太阳
   const sunLight = new THREE.PointLight(0xffffff, lightIntensity, lightdIstance); //阳光
+  const ambientLight = new THREE.AmbientLight(0x404040); //环境光
 
   const camera = new THREE.PerspectiveCamera(cameraPOV, screenWisth / screenHeight, 0.1, 1000);
   const renderer = new THREE.WebGLRenderer();
@@ -199,21 +266,24 @@
   //添加
   scene.add(sun);
   scene.add(floor);
+  scene.add(skyBox);
   scene.add(sunLight);
+  scene.add(ambientLight);
 
   floor.rotation.x = toHu(-90);
 
   //位置
   floor.position.set(0, 0, 0);
-  sun.position.set(20, 50, 10);
+  sun.position.set(0, 50, 0);
   sunLight.position.copy(sun.position);
   camera.position.set(1, 1, 10);
   camera.lookAt(1, 1, 1);
   renderer.setSize(screenWisth, screenHeight);
 
-  //设置
-  renderer.shadowMap.enabled = false;
-  sunLight.castShadow = false;
+  //光源设置
+  floor.receiveShadow = true; //允许地板接受阴影
+  renderer.shadowMap.enabled = true;
+  sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 1024;
   sunLight.shadow.mapSize.height = 1024;
 
@@ -224,6 +294,8 @@
       const itemOBJ = new THREE.Mesh(new THREE.BoxGeometry(item.size.x, item.size.y, item.size.z), blockMaterial);
       scene.add(itemOBJ);
       itemOBJ.position.set(item.coordinate.x, item.coordinate.y, item.coordinate.z);
+      itemOBJ.castShadow = true; // 允许方块投射阴影
+      itemOBJ.receiveShadow = true; //允许方块接受阴影
     };
   };
   addItem();
@@ -254,6 +326,47 @@
   //targetPoint.copy(camera.position).add(direction.multiplyScalar(distance));
 
   //console.log("摄像机前方 1 个单位远的坐标:", targetPoint);
+</script>
+<script>
+  //世界法则
+  //太阳公转(地心说的一集)
+  let sunRevolutionAngle = timeToAngle(); //公转角度(相对于y轴)
+  sun.position.y = Math.cos(toHu(sunRevolutionAngle))*50;
+  sun.position.x = Math.sin(toHu(sunRevolutionAngle))*50;
+  sunLight.position.copy(sun.position);
+  skyBox.rotation.z =-sunRevolutionAngle;
+
+skyBox.material.color = new THREE.Color("rgb(5,76,105)");
+  if ((sunRevolutionAngle%360) >= 0 && (sunRevolutionAngle%360) <= 130) {
+    skyColorToBlack(true);
+    //console.log("aaa");
+  };
+  if ((sunRevolutionAngle%360) >= 229 && (sunRevolutionAngle%360) <= 359) {
+    skyColorToBlack(false);
+    //console.log("bbb");
+  };
+
+  renderer.render(scene, camera);
+  setInterval(()=> {
+    sunRevolutionAngle += 0.25;
+    sun.position.y = Math.cos(toHu(sunRevolutionAngle))*50;
+    sun.position.x = Math.sin(toHu(sunRevolutionAngle))*50;
+
+    sunLight.position.copy(sun.position);
+    skyBox.rotation.z =-toHu(sunRevolutionAngle);
+
+    if ((sunRevolutionAngle%360) >= 0 && (sunRevolutionAngle%360) <= 130) {
+      skyColorToBlack(true);
+      //console.log("aaa");
+    };
+    if ((sunRevolutionAngle%360) >= 229 && (sunRevolutionAngle%360) <= 359) {
+      skyColorToBlack(false);
+      //console.log("bbb");
+    };
+
+
+    renderer.render(scene, camera);
+  }, 60000);
 </script>
 <script>
   //相机控件
@@ -369,7 +482,7 @@
 
     if (rotationAngleX <= toHu(60) && rotationAngleX >= -toHu(60)) {
       rotationAngleX += toHu(moveY * moveSpeed);
-      console.log(rotationAngleX);
+      //console.log(rotationAngleX);
     } else {
       if (rotationAngleX < 0) {
         rotationAngleX = toHu(-60);
@@ -499,7 +612,7 @@
 
   const control = document.querySelector('.control');
   control.addEventListener("click", () => {
-    control.requestPointerLock();//锁定鼠标
+    control.requestPointerLock(); //锁定鼠标
     document.addEventListener('mousemove', (e) => {
       e.stopPropagation();
       if (pcRotationAngleX <= toHu(60) && pcRotationAngleX >= -toHu(60)) {
