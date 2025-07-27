@@ -38,13 +38,31 @@
     .buttom {
       display: flex;
     }
+
+    .screen {
+      position: absolute;
+    }
+
+    .sight {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
   </style>
 </head>
 
 <body>
-  <div class="screen">
+  <div style="position: relative;width: 1508px;
+  height: 636px;">
+    <div class="screen">
 
+    </div>
+    <div class="sight">
+      +
+    </div>
   </div>
+
   <div class="buttom">
     <div>
       <div>
@@ -65,9 +83,6 @@
           ↓
         </div>
       </div>
-    </div>
-    <div class="control" style="margin-left:50px">
-      鼠标控制
     </div>
   </div>
 
@@ -91,8 +106,8 @@
 
     return coordinate;
   };
-  //获取摄像机的本地x轴
-  //先获取相机的视线向量，把分量x和-z交换获得相机本地x轴(虽然方法有点野，但我是天才)
+  //获取摄像机的本地x轴(废弃)
+  //先获取相机的视线向量，把分量x和-z交换获得相机本地x轴(方法有点野)
   function getRightVector() {
     const cameraAxis = new THREE.Vector3();
     camera.getWorldDirection(cameraAxis);
@@ -107,8 +122,14 @@
   //把现实世界的时间转换成太阳公转角返回
   function timeToAngle() {
     const dat = new Date();
-    const time = (dat.getHours() * 60) + dat.getMinutes();
-    const angle = (time - 720) * 0.25;
+    let time = 0;
+    if (dat.getHours() >= 12) {
+      time = ((dat.getHours() * 60) + dat.getMinutes()) - 720;
+    } else {
+      time = (dat.getHours() * 60) + dat.getMinutes();
+    };
+
+    const angle = time * 0.25;
     //console.log(time);
     return angle;
   };
@@ -156,7 +177,7 @@
   const walkSpeed = 0.1;
 
   //灵敏度
-  const moveSpeed = 0.3;
+  const moveSpeed = 0.1;
 
   //元素数组(地图)
   let itemList = [{
@@ -267,6 +288,9 @@
   const camera = new THREE.PerspectiveCamera(cameraPOV, screenWisth / screenHeight, 0.1, 1000);
   const renderer = new THREE.WebGLRenderer();
 
+  //命名
+  floor.name = "floor";
+
   //添加
   scene.add(sun);
   scene.add(moon);
@@ -281,8 +305,8 @@
   floor.position.set(0, 0, 0);
   sun.position.set(0, 50, 0);
   sunLight.position.copy(sun.position);
-  camera.position.set(1, 1, 10);
-  camera.lookAt(1, 1, 1);
+  camera.position.set(1, 3, 10);
+  camera.lookAt(1, 3, 1);
   renderer.setSize(screenWisth, screenHeight);
 
   //光源设置
@@ -292,18 +316,29 @@
   sunLight.shadow.mapSize.width = 1024;
   sunLight.shadow.mapSize.height = 1024;
 
-  //把元素数组里的元素添加到场景里
-  function addItem() {
-    for (let i = 0; i < itemList.length; i++) {
-      const item = itemList[i];
+  //把元素数组里的元素添加到场景里(传布尔值决定是否只添加最后一个)
+  function addItem(s) {
+
+    if (s) {
+      const item = itemList[itemList.length - 1];
       const itemOBJ = new THREE.Mesh(new THREE.BoxGeometry(item.size.x, item.size.y, item.size.z), blockMaterial);
       scene.add(itemOBJ);
       itemOBJ.position.set(item.coordinate.x, item.coordinate.y, item.coordinate.z);
       itemOBJ.castShadow = true; // 允许方块投射阴影
       itemOBJ.receiveShadow = true; //允许方块接受阴影
-    };
+    } else {
+      for (let i = 0; i < itemList.length; i++) {
+        const item = itemList[i];
+        const itemOBJ = new THREE.Mesh(new THREE.BoxGeometry(item.size.x, item.size.y, item.size.z), blockMaterial);
+        scene.add(itemOBJ);
+        itemOBJ.position.set(item.coordinate.x, item.coordinate.y, item.coordinate.z);
+        itemOBJ.castShadow = true; // 允许方块投射阴影
+        itemOBJ.receiveShadow = true; //允许方块接受阴影
+      };
+    }
+
   };
-  addItem();
+  addItem(false);
 
   renderer.render(scene, camera);
   const screen = document.querySelector(".screen");
@@ -347,10 +382,11 @@
   if ((sunRevolutionAngle % 360) >= 0 && (sunRevolutionAngle % 360) <= 130) {
     skyColorToBlack(true);
     //console.log("aaa");
-  };
-  if ((sunRevolutionAngle % 360) >= 229 && (sunRevolutionAngle % 360) <= 359) {
-    skyColorToBlack(false);
-    //console.log("bbb");
+  } else {
+    if ((sunRevolutionAngle % 360) >= 229 && (sunRevolutionAngle % 360) <= 359) {
+      skyColorToBlack(false);
+      //console.log("bbb");
+    };
   };
 
   renderer.render(scene, camera);
@@ -489,28 +525,22 @@
     const moveX = e.touches[0].pageX - startX;
     const moveY = e.touches[0].pageY - startY;
 
-    if (rotationAngleX <= toHu(60) && rotationAngleX >= -toHu(60)) {
-      rotationAngleX += toHu(moveY * moveSpeed);
-      //console.log(rotationAngleX);
-    } else {
-      if (rotationAngleX < 0) {
-        rotationAngleX = toHu(-60);
-        //renderer.render(scene, camera);
-      } else {
-        rotationAngleX = toHu(60);
-      }
-      //console.log('a');
-    };
+
+    rotationAngleX += toHu(moveY * moveSpeed);
+    rotationAngleX = Math.min(toHu(90), rotationAngleX);
+    rotationAngleX = Math.max(toHu(-90), rotationAngleX);
+
+
     //rotationAngleX += toHu(moveY*moveSpeed);
     rotationAngleY -= toHu(moveX * moveSpeed);
     const quaternionX = new THREE.Quaternion();
     const quaternionY = new THREE.Quaternion();
 
 
-    quaternionX.setFromAxisAngle(getRightVector(), rotationAngleX);
+    quaternionX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -rotationAngleX);
     quaternionY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationAngleY);
 
-    camera.quaternion.multiplyQuaternions(quaternionX, quaternionY);
+    camera.quaternion.multiplyQuaternions(quaternionY, quaternionX);
 
 
 
@@ -618,46 +648,131 @@
   //鼠标控制
   let pcRotationAngleX = 0;
   let pcRotationAngleY = 0;
+  let mouseControl = (e) => {
+    e.stopPropagation();
 
-  const control = document.querySelector('.control');
-  control.addEventListener("click", () => {
-    control.requestPointerLock(); //锁定鼠标
-    document.addEventListener('mousemove', (e) => {
-      e.stopPropagation();
-      if (pcRotationAngleX <= toHu(60) && pcRotationAngleX >= -toHu(60)) {
-        pcRotationAngleX += toHu(e.movementY * moveSpeed);
-        renderer.render(scene, camera);
-      } else {
-        if (pcRotationAngleX < 0) {
-          pcRotationAngleX = toHu(-60);
-          renderer.render(scene, camera);
-        } else {
-          pcRotationAngleX = toHu(60);
-          renderer.render(scene, camera);
-        }
-        //console.log('a');
-      };
-      //rotationAngleX += toHu(moveY*moveSpeed);
-      pcRotationAngleY -= toHu(e.movementX * moveSpeed);
-      const quaternionX = new THREE.Quaternion();
-      const quaternionY = new THREE.Quaternion();
+    pcRotationAngleX += toHu(e.movementY * moveSpeed);
+    pcRotationAngleX = Math.min(toHu(90), pcRotationAngleX);
+    pcRotationAngleX = Math.max(toHu(-90), pcRotationAngleX);
 
 
-      quaternionX.setFromAxisAngle(getRightVector(), pcRotationAngleX);
-      quaternionY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), pcRotationAngleY);
+    pcRotationAngleY -= toHu(e.movementX * moveSpeed);
 
-      camera.quaternion.multiplyQuaternions(quaternionX, quaternionY);
-      //console.log(e.movementX);
-    });
+    const quaternionX = new THREE.Quaternion();
+    const quaternionY = new THREE.Quaternion();
 
 
+    quaternionX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -pcRotationAngleX);
+    quaternionY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), pcRotationAngleY);
 
+    camera.quaternion.multiplyQuaternions(quaternionY, quaternionX);
+    renderer.render(scene, camera);
+    //console.log(e.movementX);
+  };
+
+  //const control = document.querySelector('.control');(按钮废除了，按k)
+  document.addEventListener("keydown", (e) => {
+    if (e.code === 'KeyK') {
+      document.body.requestPointerLock(); //锁定鼠标
+      document.addEventListener('mousemove', mouseControl);
+    };
+  });
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement == null) {
+      document.removeEventListener('mousemove', mouseControl); // 移除监听
+      //mouseControl = null;
+    };
   });
 
 
 
 
+</script>
+<script>
+  //左右键
+  document.addEventListener("mousedown", (e) => {
+    if (e.button === 2) {
+      const cameraAxis = new THREE.Vector3();
+      camera.getWorldDirection(cameraAxis);
+      const cameraRay = new THREE.Raycaster(camera.position, cameraAxis);
+      const intersectsAll = cameraRay.intersectObjects(scene.children);
 
+      //console.log(intersectsAll[0]);
+      if (intersectsAll && intersectsAll[0].distance <= 8) {
+        const newBlockCoordinates = intersectsAll[0].object.position;
+        let newBlockObj = {
+          type: "block",
+          coordinate: {
+            x: newBlockCoordinates.x,
+            y: newBlockCoordinates.y,
+            z: newBlockCoordinates.z
+          },
+          size: {
+            x: 2,
+            y: 2,
+            z: 2
+          }
+        };
+        switch (intersectsAll[0].faceIndex) {
+          case 0:
+          case 1:
+            newBlockObj.coordinate.x += 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 2:
+          case 3:
+            newBlockObj.coordinate.x -= 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 4:
+          case 5:
+            newBlockObj.coordinate.y += 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 6:
+          case 7:
+            newBlockObj.coordinate.x -= 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 8:
+          case 9:
+            newBlockObj.coordinate.z += 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 10:
+          case 11:
+            newBlockObj.coordinate.z -= 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+        }
+
+
+
+      };
+
+
+
+    } else {
+      if (e.button === 0) {
+        const cameraAxis = new THREE.Vector3();
+        camera.getWorldDirection(cameraAxis);
+        const cameraRay = new THREE.Raycaster(camera.position, cameraAxis);
+        const intersectsAll = cameraRay.intersectObjects(scene.children);
+        if (intersectsAll && intersectsAll[0].distance <= 8) {
+          scene.remove(intersectsAll[0].object);
+          console.log('qqq');
+        };
+      };
+    };
+
+    renderer.render(scene, camera);
+  });
 
 
 </script>
