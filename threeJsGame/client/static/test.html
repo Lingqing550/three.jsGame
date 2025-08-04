@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <!-- <script src="./lib/axios.min.js"></script> -->
+</head>
+
+<body>
+    <!-- <button onclick="fasong()">发送</button>
+    <button onclick="post()">post</button>
+    <script>
+        const socket = new WebSocket('ws://localhost:8080/');
+        socket.onopen = () => {
+            console.log('连接已建立');
+            socket.onmessage = (message) => {
+                console.log(message);
+        }}
+        function fasong() {
+            console.log("发送");
+            socket.send("llll");
+        };
+        function post() {
+            axios.post('http://localhost:8080/api/post',{date:'lll'})
+        }
+
+
+
+    </script> -->
+
+    <button onclick="send()"></button>
+    <script>
+        const socket = new WebSocket('ws://localhost:8080/');
+        let mySerial;
+
+        function send() {
+            socket.send(JSON.stringify({
+                serial: mySerial,
+                weiZhi: {
+                    x: 1,
+                    y: 1,
+                    z: 1
+                }
+            }));
+        };
+
+        socket.onopen = () => {
+            socket.onmessage = (message) => {
+                const a = JSON.parse(message.data);
+                if (a.youSerial) {
+                    mySerial = a.youSerial;
+                    console.log("我的序列号是" + mySerial);
+                } else {
+                    if (a.serial&&a.serial!=mySerial) {
+
+                        console.log(`玩家${a.serial}的位置在x:${a.weiZhi.x}, y:${a.weiZhi.y}, z:${a.weiZhi.z}`);
+
+                    }
+                }
+
+            };
+        };
+
+
+    </script>
+</body>
+
+</html>

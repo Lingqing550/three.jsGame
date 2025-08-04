@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>第一人称框架</title>
+  <script src="./lib/three.min.js"></script>
+  <style>
+    * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    .forward,
+    .left,
+    .right,
+    .retreat {
+      width: 40px;
+      height: 40px;
+      border: 1px solid black;
+      border-radius: 3px;
+      margin: 1px;
+      text-align: center;
+      line-height: 40px;
+    }
+
+    .forward,
+    .retreat,
+    .right {
+      margin-left: 43px;
+    }
+
+    .lf {
+      display: flex;
+    }
+
+    .buttom {
+      display: flex;
+    }
+
+    .screen {
+      position: absolute;
+    }
+
+    .sight {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+
+<body>
+  <div style="position: relative;width: 1508px;
+  height: 636px;">
+    <div class="screen">
+
+    </div>
+    <div class="sight">
+      +
+    </div>
+  </div>
+
+  <div class="buttom">
+    <div>
+      <div>
+        <div class="forward">
+          ↑
+        </div>
+      </div>
+      <div class="lf">
+        <div class="left">
+          ←
+        </div>
+        <div class="right">
+          →
+        </div>
+      </div>
+      <div>
+        <div class="retreat">
+          ↓
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+</body>
+<script>
+  //Lingqing数学库(没封装)
+  //角度转弧度
+  function toHu(du) {
+    return Math.PI * (du / 180);
+  };
+  //返回相机视线上离相机1个单位的坐标(其实是一个向量)
+  function sightAddOne() {
+    const sightVector = new THREE.Vector3();
+    camera.getWorldDirection(sightVector);
+    let coordinate = new THREE.Vector3();
+    coordinate.x = camera.position.x + sightVector.x;
+    coordinate.y = camera.position.y + sightVector.y;
+    coordinate.z = camera.position.z + sightVector.z;
+
+    return coordinate;
+  };
+  //获取摄像机的本地x轴(废弃)
+  //先获取相机的视线向量，把分量x和-z交换获得相机本地x轴(方法有点野)
+  function getRightVector() {
+    const cameraAxis = new THREE.Vector3();
+    camera.getWorldDirection(cameraAxis);
+    cameraAxis.y = 0;
+    cameraAxis.normalize();
+    const x = -cameraAxis.x;
+    cameraAxis.x = cameraAxis.z;
+    cameraAxis.z = x;
+    cameraAxis.normalize();
+    return cameraAxis;
+  };
+  //把现实世界的时间转换成太阳公转角返回
+  function timeToAngle() {
+    const dat = new Date();
+    let time = 0;
+    if (dat.getHours() >= 12) {
+      time = ((dat.getHours() * 60) + dat.getMinutes()) - 720;
+    } else {
+      time = (dat.getHours() * 60) + dat.getMinutes();
+    };
+
+    const angle = time * 0.25;
+    //console.log(time);
+    return angle;
+  };
+  //天空变色
+  function skyColorToBlack(s) {
+    if (s == true) {
+      skyColorR = 135 - Math.floor(sunRevolutionAngle % 360);
+      skyColorG = 206 - Math.floor(sunRevolutionAngle % 360);
+      skyColorB = 235 - Math.floor(sunRevolutionAngle % 360);
+    } else {
+      skyColorR = 5 + Math.floor(sunRevolutionAngle % 360) - 229;
+      skyColorG = 76 + Math.floor(sunRevolutionAngle % 360) - 229;
+      skyColorB = 105 + Math.floor(sunRevolutionAngle % 360) - 229;
+    };
+    let skyColor = "rgb(" + skyColorR + "," + skyColorG + "," + skyColorB + ")";
+    //console.log(skyColor);
+    skyBox.material.color = new THREE.Color(skyColor);
+
+  };
+
+
+</script>
+<script>
+
+  //各种参数
+  //窗口大小
+  const screenWisth = window.innerWidth - 20;
+  const screenHeight = window.innerHeight - 150;
+
+  //相机视场角
+  const cameraPOV = 70;
+
+  //太阳光强度
+  const lightIntensity = 2;
+  //照射距离
+  const lightdIstance = 600;
+
+  //天空初始颜色
+  let skyColorR = 135;
+  let skyColorG = 206;
+  let skyColorB = 235;
+  let skyColor = "rgb(" + skyColorR + "," + skyColorG + "," + skyColorB + ")";
+
+  //走路速度
+  const walkSpeed = 0.1;
+
+  //灵敏度
+  const moveSpeed = 0.1;
+
+  //元素数组(地图)
+  let itemList = [{
+    type: "block",
+    coordinate: {
+      x: 1,
+      y: 1,
+      z: 1
+    },
+    size: {
+      x: 2,
+      y: 2,
+      z: 2
+    }
+  },
+  {
+    type: "block",
+    coordinate: {
+      x: 3,
+      y: 1,
+      z: 3
+    },
+    size: {
+      x: 2,
+      y: 2,
+      z: 2
+    }
+  }];
+
+  //元素贴图
+  const blockMaterial = [
+    //new THREE.MeshBasicMaterial({//没阴影
+    new THREE.MeshStandardMaterial({
+      color: 0xff0000
+    }),
+    // 右 (红)
+    new THREE.MeshStandardMaterial({
+      color: 0x00ff00
+    }),
+    // 左 (绿)
+    new THREE.MeshStandardMaterial({
+      color: 0x0000ff
+    }),
+    // 上 (蓝)
+    new THREE.MeshStandardMaterial({
+      color: 0xffff00
+    }),
+    // 下 (黄)
+    new THREE.MeshStandardMaterial({
+      color: 0xff00ff
+    }),
+    // 前 (品红)
+    new THREE.MeshStandardMaterial({
+      color: 0x00ffff
+    }) // 后 (青)
+  ];
+  //地板贴图(棋盘格)
+  function floorTextuer() {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 200;
+    const textuer = canvas.getContext('2d');
+    for (let i = 0; i < 10; i++) {
+      for (let l = 0; l < 10; l++) {
+        textuer.fillStyle = (i + l) % 2 == 0 ? "#4a4a4a" : "#2a2a2a";
+        textuer.fillRect(l * 20, i * 20, 20, 20);
+      };
+    };
+    const canvasTexture = new THREE.CanvasTexture(canvas);
+    canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
+    canvasTexture.repeat.set(40, 40);
+    return canvasTexture;
+  };
+  //天空盒渐变材质
+  function skyBoxTextuer() {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 200;
+    const textuer = canvas.getContext('2d');
+    const colors = textuer.createLinearGradient(0, 30, 0, 180);
+    colors.addColorStop(0, "#87ceeb");
+    colors.addColorStop(1, "#384c54");
+    textuer.fillStyle = colors;
+    textuer.fillRect(0, 0, 200, 200);
+
+    const canvasTexture = new THREE.CanvasTexture(canvas);
+    return canvasTexture;
+  };
+
+
+  //初始化虚拟场景
+  const scene = new THREE.Scene();
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({
+    map: floorTextuer(),
+    roughness: 0.8
+  })); //地板
+  const skyBox = new THREE.Mesh(new THREE.BoxGeometry(1000, 1000, 1000), new THREE.MeshBasicMaterial({
+    color: new THREE.Color(skyColor),
+    side: THREE.BackSide
+  })); //天空盒
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshBasicMaterial({
+    color: 0xfff9b6,
+  })); //太阳
+  const moon = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+  })); //月亮
+  const sunLight = new THREE.PointLight(0xffffff, lightIntensity, lightdIstance); //阳光
+  const ambientLight = new THREE.AmbientLight(0x404040); //环境光
+
+  const camera = new THREE.PerspectiveCamera(cameraPOV, screenWisth / screenHeight, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer();
+
+  //命名
+  floor.name = "floor";
+
+  //添加
+  scene.add(sun);
+  scene.add(moon);
+  scene.add(floor);
+  scene.add(skyBox);
+  scene.add(sunLight);
+  scene.add(ambientLight);
+
+  floor.rotation.x = toHu(-90);
+
+  //位置
+  floor.position.set(0, 0, 0);
+  sun.position.set(0, 50, 0);
+  sunLight.position.copy(sun.position);
+  camera.position.set(1, 3, 10);
+  camera.lookAt(1, 3, 1);
+  renderer.setSize(screenWisth, screenHeight);
+
+  //光源设置
+  floor.receiveShadow = true; //允许地板接受阴影
+  renderer.shadowMap.enabled = true;
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.width = 1024;
+  sunLight.shadow.mapSize.height = 1024;
+
+  //把元素数组里的元素添加到场景里(传布尔值决定是否只添加最后一个)
+  function addItem(s) {
+
+    if (s) {
+      const item = itemList[itemList.length - 1];
+      const itemOBJ = new THREE.Mesh(new THREE.BoxGeometry(item.size.x, item.size.y, item.size.z), blockMaterial);
+      scene.add(itemOBJ);
+      itemOBJ.position.set(item.coordinate.x, item.coordinate.y, item.coordinate.z);
+      itemOBJ.castShadow = true; // 允许方块投射阴影
+      itemOBJ.receiveShadow = true; //允许方块接受阴影
+    } else {
+      for (let i = 0; i < itemList.length; i++) {
+        const item = itemList[i];
+        const itemOBJ = new THREE.Mesh(new THREE.BoxGeometry(item.size.x, item.size.y, item.size.z), blockMaterial);
+        scene.add(itemOBJ);
+        itemOBJ.position.set(item.coordinate.x, item.coordinate.y, item.coordinate.z);
+        itemOBJ.castShadow = true; // 允许方块投射阴影
+        itemOBJ.receiveShadow = true; //允许方块接受阴影
+      };
+    }
+
+  };
+  addItem(false);
+
+  renderer.render(scene, camera);
+  const screen = document.querySelector(".screen");
+  screen.appendChild(renderer.domElement);
+</script>
+<script>
+  //获取摄像机视线上离摄像机距离为1的点坐标
+  // 获取摄像机视线方向（单位向量）
+  //const direction = new THREE.Vector3();
+  //camera.getWorldDirection(direction);
+
+
+  //lingqing解法
+  //let mbzb = new THREE.Vector3();
+  //mbzb.x = camera.position.x+direction.x;
+  //mbzb.y = camera.position.y+direction.y;
+  //mbzb.z = camera.position.z+direction.z;
+
+  //console.log(mbzb);
+
+  //ai解法
+  // 计算离摄像机 1 个单位远的点
+  //const distance = 1;
+  //const targetPoint = new THREE.Vector3();
+  //targetPoint.copy(camera.position).add(direction.multiplyScalar(distance));
+
+  //console.log("摄像机前方 1 个单位远的坐标:", targetPoint);
+</script>
+<script>
+  //世界法则
+  //太阳公转(地心说的一集)
+  let sunRevolutionAngle = timeToAngle(); //公转角度(相对于y轴)
+  sun.position.y = Math.cos(toHu(sunRevolutionAngle)) * 50;
+  sun.position.x = Math.sin(toHu(sunRevolutionAngle)) * 50;
+  moon.position.y = -(Math.cos(toHu(sunRevolutionAngle)) * 50);
+  moon.position.x = -(Math.sin(toHu(sunRevolutionAngle)) * 50);
+  sunLight.position.copy(sun.position);
+  skyBox.rotation.z = -sunRevolutionAngle;
+
+  skyBox.material.color = new THREE.Color("rgb(5,76,105)");
+  if ((sunRevolutionAngle % 360) >= 0 && (sunRevolutionAngle % 360) <= 130) {
+    skyColorToBlack(true);
+    //console.log("aaa");
+  } else {
+    if ((sunRevolutionAngle % 360) >= 229 && (sunRevolutionAngle % 360) <= 359) {
+      skyColorToBlack(false);
+      //console.log("bbb");
+    };
+  };
+
+  renderer.render(scene, camera);
+  setInterval(() => {
+    sunRevolutionAngle += 0.25;
+    sun.position.y = Math.cos(toHu(sunRevolutionAngle)) * 50;
+    sun.position.x = Math.sin(toHu(sunRevolutionAngle)) * 50;
+    moon.position.y = -(Math.cos(toHu(sunRevolutionAngle)) * 50);
+    moon.position.x = -(Math.sin(toHu(sunRevolutionAngle)) * 50);
+
+    sunLight.position.copy(sun.position);
+    skyBox.rotation.z = -toHu(sunRevolutionAngle);
+
+    if ((sunRevolutionAngle % 360) >= 0 && (sunRevolutionAngle % 360) <= 130) {
+      skyColorToBlack(true);
+      //console.log("aaa");
+    };
+    if ((sunRevolutionAngle % 360) >= 229 && (sunRevolutionAngle % 360) <= 359) {
+      skyColorToBlack(false);
+      //console.log("bbb");
+    };
+
+
+    renderer.render(scene, camera);
+  }, 60000);
+</script>
+<script>
+  //相机控件
+
+  //移动
+  //前进
+  let k;
+  const forward = document.querySelector(".forward");
+  forward.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      let cameraPosition = camera.position;
+      let cameraFace = new THREE.Vector3();
+      camera.getWorldDirection(cameraFace);
+      cameraFace.y = 0;
+      cameraFace.normalize();
+      camera.position.set(
+        cameraPosition.x + (cameraFace.x * walkSpeed),
+        cameraPosition.y + (cameraFace.y * walkSpeed),
+        cameraPosition.z + (cameraFace.z * walkSpeed)
+      );
+      renderer.render(scene, camera);
+      //console.log(camera.position);
+    }, 16);
+    //console.log("bbb");
+  });
+  forward.addEventListener("touchend", () => {
+    clearInterval(k);
+    //console.log("aaa");
+  });
+  //左
+  const left = document.querySelector(".left");
+  left.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      const vector = getRightVector();
+      let cameraPosition = camera.position;
+      cameraPosition.x += vector.x * walkSpeed;
+      cameraPosition.z += vector.z * walkSpeed;
+      camera.position.set(
+        cameraPosition.x,
+        camera.position.y,
+        cameraPosition.z
+      );
+      renderer.render(scene, camera);
+    }, 16);
+  });
+  left.addEventListener("touchend", () => {
+    clearInterval(k);
+  });
+  //右
+  const right = document.querySelector(".right");
+  right.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      const vector = getRightVector();
+      let cameraPosition = camera.position;
+      cameraPosition.x -= vector.x * walkSpeed;
+      cameraPosition.z -= vector.z * walkSpeed;
+      camera.position.set(
+        cameraPosition.x,
+        camera.position.y,
+        cameraPosition.z
+      );
+      renderer.render(scene, camera);
+    }, 16);
+  });
+  right.addEventListener("touchend", () => {
+    clearInterval(k);
+  });
+  //后退
+  const retreat = document.querySelector(".retreat");
+  retreat.addEventListener("touchstart", () => {
+    k = setInterval(() => {
+      let cameraPosition = camera.position;
+      let cameraFace = new THREE.Vector3();
+      camera.getWorldDirection(cameraFace);
+      cameraFace.y = 0;
+      cameraFace.normalize();
+      camera.position.set(
+        cameraPosition.x - (cameraFace.x * walkSpeed),
+        cameraPosition.y - (cameraFace.y * walkSpeed),
+        cameraPosition.z - (cameraFace.z * walkSpeed)
+      );
+      renderer.render(scene, camera);
+      //console.log(camera.position);
+    }, 16);
+    //console.log("bbb");
+  });
+  retreat.addEventListener("touchend", () => {
+    clearInterval(k);
+    //console.log("aaa");
+  });
+
+
+  //触屏
+  let startX, startY;
+  let isDragging = false;
+
+  screen.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startX = e.touches[0].pageX;
+    startY = e.touches[0].pageY;
+    isDragging = true;
+  });
+
+
+  let rotationAngleX = 0;
+  let rotationAngleY = 0;
+  screen.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+
+    const moveX = e.touches[0].pageX - startX;
+    const moveY = e.touches[0].pageY - startY;
+
+
+    rotationAngleX += toHu(moveY * moveSpeed);
+    rotationAngleX = Math.min(toHu(90), rotationAngleX);
+    rotationAngleX = Math.max(toHu(-90), rotationAngleX);
+
+
+    //rotationAngleX += toHu(moveY*moveSpeed);
+    rotationAngleY -= toHu(moveX * moveSpeed);
+    const quaternionX = new THREE.Quaternion();
+    const quaternionY = new THREE.Quaternion();
+
+
+    quaternionX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -rotationAngleX);
+    quaternionY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationAngleY);
+
+    camera.quaternion.multiplyQuaternions(quaternionY, quaternionX);
+
+
+
+    startX = e.touches[0].pageX;
+    startY = e.touches[0].pageY;
+    renderer.render(scene, camera);
+  });
+
+  screen.addEventListener('touchend', () => {
+    isDragging = false;
+  });
+
+  //pc端
+  let qj, ht, z, y;
+  document.addEventListener("keydown", (e) => {
+
+    if (e.code === 'KeyW') {
+      clearInterval(qj);
+      qj = null;
+      qj = setInterval(() => {
+        let cameraPosition = camera.position;
+        let cameraFace = new THREE.Vector3();
+        camera.getWorldDirection(cameraFace);
+        cameraFace.y = 0;
+        cameraFace.normalize();
+        camera.position.set(
+          cameraPosition.x + (cameraFace.x * walkSpeed),
+          cameraPosition.y + (cameraFace.y * walkSpeed),
+          cameraPosition.z + (cameraFace.z * walkSpeed)
+        );
+        renderer.render(scene, camera);
+        //console.log('aaa');
+      }, 16);
+      //console.log("bbb");
+    };
+    if (e.code === 'KeyS') {
+      clearInterval(ht);
+      ht = null;
+      ht = setInterval(() => {
+        let cameraPosition = camera.position;
+        let cameraFace = new THREE.Vector3();
+        camera.getWorldDirection(cameraFace);
+        cameraFace.y = 0;
+        cameraFace.normalize();
+        camera.position.set(
+          cameraPosition.x - (cameraFace.x * walkSpeed),
+          cameraPosition.y - (cameraFace.y * walkSpeed),
+          cameraPosition.z - (cameraFace.z * walkSpeed)
+        );
+        renderer.render(scene, camera);
+      }, 16);
+    };
+    if (e.code === 'KeyA') {
+      clearInterval(z);
+      z = null;
+      z = setInterval(() => {
+        const vector = getRightVector();
+        let cameraPosition = camera.position;
+        cameraPosition.x += vector.x * walkSpeed;
+        cameraPosition.z += vector.z * walkSpeed;
+        camera.position.set(
+          cameraPosition.x,
+          camera.position.y,
+          cameraPosition.z
+        );
+        renderer.render(scene, camera);
+      }, 16);
+    };
+    if (e.code === 'KeyD') {
+      clearInterval(y);
+      y = null;
+      y = setInterval(() => {
+        const vector = getRightVector();
+        let cameraPosition = camera.position;
+        cameraPosition.x -= vector.x * walkSpeed;
+        cameraPosition.z -= vector.z * walkSpeed;
+        camera.position.set(
+          cameraPosition.x,
+          camera.position.y,
+          cameraPosition.z
+        );
+        renderer.render(scene, camera);
+      }, 16);
+    };
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.code === 'KeyW') {
+      clearInterval(qj);
+      qj = null;
+    };
+    if (e.code === 'KeyS') {
+      clearInterval(ht);
+      ht = null;
+    };
+    if (e.code === 'KeyA') {
+      clearInterval(z);
+      z = null;
+    };
+    if (e.code === 'KeyD') {
+      clearInterval(y);
+      y = null;
+    };
+  });
+
+  //鼠标控制
+  let pcRotationAngleX = 0;
+  let pcRotationAngleY = 0;
+  let mouseControl = (e) => {
+    e.stopPropagation();
+
+    pcRotationAngleX += toHu(e.movementY * moveSpeed);
+    pcRotationAngleX = Math.min(toHu(90), pcRotationAngleX);
+    pcRotationAngleX = Math.max(toHu(-90), pcRotationAngleX);
+
+
+    pcRotationAngleY -= toHu(e.movementX * moveSpeed);
+
+    const quaternionX = new THREE.Quaternion();
+    const quaternionY = new THREE.Quaternion();
+
+
+    quaternionX.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -pcRotationAngleX);
+    quaternionY.setFromAxisAngle(new THREE.Vector3(0, 1, 0), pcRotationAngleY);
+
+    camera.quaternion.multiplyQuaternions(quaternionY, quaternionX);
+    renderer.render(scene, camera);
+    //console.log(e.movementX);
+  };
+
+  //const control = document.querySelector('.control');(按钮废除了，按k)
+  document.addEventListener("keydown", (e) => {
+    if (e.code === 'KeyK') {
+      document.body.requestPointerLock(); //锁定鼠标
+      document.addEventListener('mousemove', mouseControl);
+    };
+  });
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement == null) {
+      document.removeEventListener('mousemove', mouseControl); // 移除监听
+      //mouseControl = null;
+    };
+  });
+
+
+
+
+</script>
+<script>
+  //左右键
+  document.addEventListener("mousedown", (e) => {
+    if (e.button === 2) {
+      const cameraAxis = new THREE.Vector3();
+      camera.getWorldDirection(cameraAxis);
+      const cameraRay = new THREE.Raycaster(camera.position, cameraAxis);
+      const intersectsAll = cameraRay.intersectObjects(scene.children);
+
+      //console.log(intersectsAll[0]);
+      if (intersectsAll && intersectsAll[0].distance <= 8) {
+        const newBlockCoordinates = intersectsAll[0].object.position;
+        let newBlockObj = {
+          type: "block",
+          coordinate: {
+            x: newBlockCoordinates.x,
+            y: newBlockCoordinates.y,
+            z: newBlockCoordinates.z
+          },
+          size: {
+            x: 2,
+            y: 2,
+            z: 2
+          }
+        };
+        switch (intersectsAll[0].faceIndex) {
+          case 0:
+          case 1:
+            newBlockObj.coordinate.x += 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 2:
+          case 3:
+            newBlockObj.coordinate.x -= 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 4:
+          case 5:
+            newBlockObj.coordinate.y += 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 6:
+          case 7:
+            newBlockObj.coordinate.x -= 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 8:
+          case 9:
+            newBlockObj.coordinate.z += 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+          case 10:
+          case 11:
+            newBlockObj.coordinate.z -= 2;
+            itemList.push(newBlockObj);
+            addItem(true);
+            break;
+        }
+
+
+
+      };
+
+
+
+    } else {
+      if (e.button === 0) {
+        const cameraAxis = new THREE.Vector3();
+        camera.getWorldDirection(cameraAxis);
+        const cameraRay = new THREE.Raycaster(camera.position, cameraAxis);
+        const intersectsAll = cameraRay.intersectObjects(scene.children);
+        if (intersectsAll && intersectsAll[0].distance <= 8) {
+          scene.remove(intersectsAll[0].object);
+          console.log('qqq');
+        };
+      };
+    };
+
+    renderer.render(scene, camera);
+  });
+
+
+</script>
+<script>
+  //联机模块
+  const socket = new WebSocket('ws://localhost:8080/');
+  let mySerial;
+  //const playerList = new Array();
+
+  socket.onopen = () => {
+
+    setInterval(()=>{
+      positionSend()
+    },33);//发包频率30赫兹
+
+
+    socket.onmessage = (message) => {
+      const messageObj = JSON.parse(message.data);
+      if (messageObj.youSerial) {
+        mySerial = messageObj.youSerial;
+        console.log(`我的序列号是${mySerial}`);
+      } else {
+        if (messageObj.playerSerial && messageObj.playerSerial != mySerial) {
+          const playerSearchjg = playerSearch(`player${messageObj.playerSerial}`);
+          if (playerSearchjg) {
+            playerSearchjg.position.set(messageObj.playerPosition.x,messageObj.playerPosition.y,messageObj.playerPosition.z);
+            renderer.render(scene, camera);
+          }else{
+            console.log(`玩家player${messageObj.playerSerial}已连接`);
+            playerAdd(messageObj.playerSerial,messageObj.playerPosition);
+          }
+
+        }
+      }
+    }
+  }
+
+  function positionSend() {
+    const playerPosition = camera.position;
+    socket.send(JSON.stringify({
+      playerSerial: mySerial,
+      playerPosition: {
+        x: playerPosition.x,
+        y: playerPosition.y,
+        z: playerPosition.z
+      }
+    }));
+  };//发送自己的位置
+
+  function playerAdd(playerSerial, playerPosition) {
+    const playerOBJ = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    scene.add(playerOBJ);
+    playerOBJ.name = `player${playerSerial}`;
+    playerOBJ.position.set(playerPosition.x, playerPosition.y, playerPosition.z);
+
+    renderer.render(scene, camera);
+  };
+
+  function playerSearch(playerName) {
+    for(let i = 0;i<scene.children.length;i++){
+      if (scene.children[i].name==playerName) {
+        return scene.children[i];
+      };
+    };
+    return false;
+  }//在场景里查找玩家
+  console.log(scene.children);
+</script>
+
+</html>
